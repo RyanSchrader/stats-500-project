@@ -10,7 +10,7 @@ import sys
 
 def collect_article_urls(filename):
     #return a list
-    urls = list()
+    urls_videos = list()
     mycsv = csv.reader(open(filename))
     first = True
     for row in mycsv:
@@ -19,21 +19,34 @@ def collect_article_urls(filename):
             first = False
             continue
         url = row[0]
-        urls.append(url)
-    return urls
-
-
-def collect_article_variables(article_url):
-    #return a dict (variable_name->value)
-    variables = dict()
+        videos = row[10]
+        #urls.append(url)
+        urls_videos.append( (url,videos) )
+    return urls_videos
 
 
 def write_to_csv(filename, article_statistics):
     length = len(article_statistics[0])
-    with open(filename, 'wb') as out_file:
-        csv_writer = csv.writer(out_file)
-        for y in range(length):
-            csv_writer.writerow([x[y] for x in article_statistics])
+    #with open(filename, 'wb') as out_file:
+    #    csv_writer = csv.writer(out_file)
+    #    for y in range(length):
+    #        csv_writer.writerow([x[y] for x in article_statistics])
+    #writer = csv.writer(open(filename, 'wb'))
+    #for article in article_statistics:
+
+    #for key, value in mydict.items():
+    #   writer.writerow([key, value])
+
+
+    #keys = article_statistics[0].keys()
+    keys = ["url", "date", "time", "author", "title_num_words", "title_num_characters", "content_num_paragraphs", "content_num_words", "content_num_characters", "avg_word_length", "num_hrefs", "num_self_hrefs", "num_imgs", "num_videos", "num_topics", "data_channel_is_business", "data_channel_is_entertainment", "data_channel_is_lifestyle", "data_channel_is_social-media"]
+    keys.extend(["data_channel_is_tech",  "data_channel_is_watercooler", "data_channel_is_world",  "self_reference_min_shares", "self_reference_max_shares", "self_reference_avg_shares", "weekday_is_Mon", "weekday_is_Tue", "weekday_is_Wed", "weekday_is_Thu", "weekday_is_Fri", "weekday_is_Sat", "weekday_is_Sun", "global_sentiment_subjectivity", "global_sentiment_polarity", "global_rate_positive_words", "global_rate_negative_words", "rate_positive_words", "rate_negative_words"])
+    keys.extend(["min_positive_polarity", "max_positive_polarity", "avg_positive_polarity", "min_negative_polarity", "max_negative_polarity", "avg_negative_polarity", "title_sentiment_subjectivity", "title_sentiment_polarity", "shares_facebook", "shares_google_plus", "shares_linked_in", "shares_pinterest", "shares_stumble_upon", "shares_twitter", "shares_total"])
+
+    with open(filename, 'wb') as output_file:
+        dict_writer = csv.DictWriter(output_file, keys)
+        dict_writer.writeheader()
+        dict_writer.writerows(article_statistics)
 
 
 def calc_shares(str_shares):
@@ -46,35 +59,50 @@ def calc_shares(str_shares):
 
 def main():
     input_filename = "OnlineNewsPopularity/OnlineNewsPopularity.csv"
-    article_urls = collect_article_urls(input_filename)
-    article_statistics = dict()
-    for url in article_urls:
-        article_statistics[url] = collect_article_variables(url)
-    write_to_csv('scraped_dataset.csv', article_statistics)
+    article_urls_videos = collect_article_urls(input_filename)
+    #article_statistics = dict()
+    article_stats = list()
+    i = 0
+    for url_video in article_urls_videos:
+        #article_statistics[url_video[0]] = collect_article_variables(url_video)
+        article_stats.append(collect_article_variables(url_video))
+        i += 1
+        if i > 3000:
+            break
+    write_to_csv('scraped_dataset_3000_samples.csv', article_stats)
 
 #####
-def test_one_article():
+counter = 0
+def collect_article_variables(url_video):
     #url = "http://mashable.com/2013/01/07/amazon-instant-video-browser/"
     #url = "http://mashable.com/2013/01/07/creature-cups/"
-    url = "http://mashable.com/2013/01/09/gopro-videos/"
+    #url = "http://mashable.com/2013/01/09/gopro-videos/"
     article_statistics = dict()
-    res = requests.get(url)
+    article_statistics["url"] = url_video[0]
+    article_statistics["num_videos"] = url_video[1]
+
+    res = requests.get(url_video[0])
     res.raise_for_status()
     soup = bs4.BeautifulSoup(res.text)
 
     # grab total shares
-    #shares_total = soup.find_all("div", class_="total-shares")
-    #article_statistics['shares_total'] = shares_total[0].find('em').string
     shares_total = soup.find(class_="total-shares")
-    article_statistics['shares_total'] = calc_shares(shares_total.find('em').string)
+    #article_statistics['shares_total'] = calc_shares(shares_total.find('em').string)
+    article_statistics['shares_total'] = 0
 
     # grab shares per social media platform
     social_media_platforms = ["facebook", "twitter", "google_plus", "linked_in", "stumble_upon", "pinterest"]
     for platform in social_media_platforms:
-        article_statistics["shares_" + platform] = calc_shares(soup.find(class_="social-stub social-share " + platform)['data-shares'])
+        platform_shares = calc_shares(soup.find(class_="social-stub social-share " + platform)['data-shares'])
+        article_statistics["shares_" + platform] = platform_shares
+        article_statistics['shares_total'] += platform_shares
 
     # grab author
-    article_statistics['author'] = soup.find(class_="author_name").string.replace("By ", "")
+    author_name = soup.find(class_="author_name")
+    if author_name:
+        article_statistics['author'] = author_name.string.replace("By ", "")
+    else:
+        article_statistics['author'] = None
 
     # grab date and time of publication
     time_field =    soup.find('time')
@@ -84,8 +112,8 @@ def test_one_article():
     weekday =   time_field['datetime'][0:3]
     article_statistics['date'] = date
     article_statistics['time'] = time
-    article_statistics['datetime'] = date_time
-    article_statistics['weekday'] = weekday
+    #article_statistics['datetime'] = date_time
+    #article_statistics['weekday'] = weekday
     possible_days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     for day in possible_days_of_week:
         if day == weekday:
@@ -111,22 +139,23 @@ def test_one_article():
 
     body = soup.find(class_="article-content")
     body_paragraphs = body.find_all('p', recursive=False)
-    print body_paragraphs
+    #print body_paragraphs
     body_text = ""
-    num_paragraphs = 0
+    #num_paragraphs = 0
     for paragraph in body_paragraphs:
-        first = True
+        #first = True
         for content in paragraph.contents:
             if content.string:
                 body_text += content.string + " "
-                if first:
-                    num_paragraphs += 1
-                    first = False
+                #if first:
+                #    num_paragraphs += 1
+                #    first = False
     body_text = " ".join(body_text.split())    #removes double spaces
     #print body.text
     article_statistics["content_num_characters"] = len(body_text)
     article_statistics["content_num_words"]      = len(body_text.split())
-    article_statistics["content_num_paragraphs"] = num_paragraphs
+    #article_statistics["content_num_paragraphs"] = num_paragraphs
+    article_statistics["content_num_paragraphs"] = len(body_paragraphs)
 
     # grab topics
     topics = soup.find(class_="article-topics")
@@ -135,7 +164,7 @@ def test_one_article():
     # grab {num_hrefs, num_self_hrefs, num_imgs, num_videos}
     # TODO: this is wrong for the fisrt article, I have 0, but csv_answer is 1
     article_statistics["num_hrefs"] = len(body.find_all('a'))
-    self_links = [link for link in body.find_all('a') if "mashable.com" in link['href']]
+    self_links = [link for link in body.find_all('a') if link.has_attr('href') and "mashable.com/20" in link['href']]
     article_statistics["num_self_hrefs"] = len(self_links)
     num_imgs = len(soup.find(class_="article-image").find_all('img')) # find_all forces it to be a list, which allows us to call len()
     num_imgs += len(body.find_all('img'))   #this has an issue of double counting the first img on link: http://mashable.com/2013/01/07/downton-abbey-tumblrs/#bB_h2E4PpmqZ
@@ -154,21 +183,45 @@ def test_one_article():
     num_words = len(words)
     positive_words = [word for word in words if TextBlob(word).sentiment.polarity > 0]
     negative_words = [word for word in words if TextBlob(word).sentiment.polarity < 0]
-    article_statistics["global_rate_positive_words"] = len(positive_words)/float(len(words))
-    article_statistics["global_rate_negative_words"] = len(negative_words)/float(len(words))
-    article_statistics["rate_positive_words"]        = len(positive_words)/float(len(positive_words)+len(negative_words))
-    article_statistics["rate_negative_words"]        = len(negative_words)/float(len(positive_words)+len(negative_words))
+    if len(words) == 0:
+        article_statistics["global_rate_positive_words"] = 0
+        article_statistics["global_rate_negative_words"] = 0
+    else:
+        article_statistics["global_rate_positive_words"] = len(positive_words)/float(len(words))
+        article_statistics["global_rate_negative_words"] = len(negative_words)/float(len(words))
+
+    if len(positive_words)+len(negative_words) == 0:
+        article_statistics["rate_positive_words"]        = 0
+        article_statistics["rate_negative_words"]        = 0
+    else:
+        article_statistics["rate_positive_words"]        = len(positive_words)/float(len(positive_words)+len(negative_words))
+        article_statistics["rate_negative_words"]        = len(negative_words)/float(len(positive_words)+len(negative_words))
+
     positive_word_polarities = [TextBlob(word).sentiment.polarity for word in positive_words]
     negative_word_polarities = [TextBlob(word).sentiment.polarity for word in negative_words]
-    article_statistics["avg_positive_polarity"]      = sum(positive_word_polarities)/float(len(positive_word_polarities))
-    article_statistics["min_positive_polarity"]      = min(positive_word_polarities)
-    article_statistics["max_positive_polarity"]      = max(positive_word_polarities)
-    article_statistics["avg_negative_polarity"]      = sum(negative_word_polarities)/float(len(negative_word_polarities))
-    article_statistics["min_negative_polarity"]      = min(negative_word_polarities)
-    article_statistics["max_negative_polarity"]      = max(negative_word_polarities)
+    if len(positive_word_polarities) == 0:
+        article_statistics["avg_positive_polarity"]      = 0
+        article_statistics["min_positive_polarity"]      = 0
+        article_statistics["max_positive_polarity"]      = 0
+    else:
+        article_statistics["avg_positive_polarity"]      = sum(positive_word_polarities)/float(len(positive_word_polarities))
+        article_statistics["min_positive_polarity"]      = min(positive_word_polarities)
+        article_statistics["max_positive_polarity"]      = max(positive_word_polarities)
+
+    if len(negative_word_polarities) == 0:
+        article_statistics["avg_negative_polarity"]      = 0
+        article_statistics["min_negative_polarity"]      = 0
+        article_statistics["max_negative_polarity"]      = 0
+    else:
+        article_statistics["avg_negative_polarity"]      = sum(negative_word_polarities)/float(len(negative_word_polarities))
+        article_statistics["min_negative_polarity"]      = min(negative_word_polarities)
+        article_statistics["max_negative_polarity"]      = max(negative_word_polarities)
 
     condensed_text = ''.join(char for char in body_text if char.isalnum())
-    article_statistics["avg_word_length"] = len(condensed_text)/float(num_words)
+    if num_words == 0:
+        article_statistics["avg_word_length"] = 0
+    else:
+        article_statistics["avg_word_length"] = len(condensed_text)/float(num_words)
 
     self_ref_shares = []
     for link in self_links:
@@ -178,7 +231,10 @@ def test_one_article():
         ref_res = requests.get(ref_url)
         ref_res.raise_for_status()
         ref_soup = bs4.BeautifulSoup(ref_res.text)
-        ref_shares = calc_shares(ref_soup.find(class_="total-shares").find('em').string)
+        ref_shares = 0
+        for platform in social_media_platforms:
+            ref_platform_shares = calc_shares(ref_soup.find(class_="social-stub social-share " + platform)['data-shares'])
+            ref_shares += ref_platform_shares
         self_ref_shares.append(ref_shares)
     if len(self_ref_shares) == 0:
         article_statistics["self_reference_avg_shares"] = None
@@ -192,15 +248,21 @@ def test_one_article():
     #things not certain about: num_imgs, num_videos
 
 
-    print
-    print
-    print "PRINTING 'key: value' CONTENTS OF DICTIONARY"
-    print "------------------------------------------------------"
-    for key,value in sorted(article_statistics.iteritems()):
-        num_spaces = 35-len(key)
-        print "    " + key + ":" + " "*num_spaces + str(value)
-    print "------------------------------------------------------"
+    #print
+    #print
+    #print "PRINTING 'key: value' CONTENTS OF DICTIONARY"
+    #print "------------------------------------------------------"
+    #for key,value in sorted(article_statistics.iteritems()):
+    #    num_spaces = 35-len(key)
+    #    print "    " + key + ":" + " "*num_spaces + str(value)
+    #print "------------------------------------------------------"
 
+    global counter
+    counter += 1
+    print counter, url_video[0]
+
+
+    return article_statistics
 
     #blob = TextBlob("What did you think of the movie? I thought it was boring.")
     #print blob.tags
@@ -209,7 +271,9 @@ def test_one_article():
     #print sentence.sentiment.subjectivity
 
 
-test_one_article()
+#collect_article_variables(("http://mashable.com/2013/01/09/gopro-videos/",11))
+
+main()
 
 #for i in range(120):
 #    test_one_article()
