@@ -60,16 +60,25 @@ def calc_shares(str_shares):
 def main():
     input_filename = "OnlineNewsPopularity/OnlineNewsPopularity.csv"
     article_urls_videos = collect_article_urls(input_filename)
+    #article_urls_videos = list()
+    #article_urls_videos.append(("http://mashable.com/2013/01/25/data-vs-nature-infographic/#uYW0Pfm2f5qj",3))
+    #article_urls_videos.append(("http://mashable.com/2013/01/16/facebook-graph-search-name/#3HJqUDApA8qQ",1))
+    #article_urls_videos.append(("http://mashable.com/2013/01/15/facebook-graph-search-great/%20/",2))
+
     #article_statistics = dict()
     article_stats = list()
-    i = 0
+    #i = 0
     for url_video in article_urls_videos:
         #article_statistics[url_video[0]] = collect_article_variables(url_video)
-        article_stats.append(collect_article_variables(url_video))
-        i += 1
-        if i > 3000:
-            break
-    write_to_csv('scraped_dataset_3000_samples.csv', article_stats)
+        val = collect_article_variables(url_video)
+        if val == -1:
+            continue
+        else:
+            article_stats.append(val)
+        #    i += 1
+        #    if i > 1500:
+        #        break
+    write_to_csv('scraped_dataset_all_samples.csv', article_stats)
 
 #####
 counter = 0
@@ -82,7 +91,10 @@ def collect_article_variables(url_video):
     article_statistics["num_videos"] = url_video[1]
 
     res = requests.get(url_video[0])
-    res.raise_for_status()
+    #res.raise_for_status()
+    if res.status_code != requests.codes.ok:
+        return -1
+
     soup = bs4.BeautifulSoup(res.text)
 
     # grab total shares
@@ -228,8 +240,11 @@ def collect_article_variables(url_video):
         if "http://mashable.com/20" not in link['href']:
             continue
         ref_url = link['href']
+        ref_url = 'http'+ref_url.split('http')[1] #removes everything before http
         ref_res = requests.get(ref_url)
-        ref_res.raise_for_status()
+        #ref_res.raise_for_status()
+        if ref_res.status_code != requests.codes.ok:
+            continue
         ref_soup = bs4.BeautifulSoup(ref_res.text)
         ref_shares = 0
         for platform in social_media_platforms:
